@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Profi Méhész v8.7</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root { --primary: #f1c40f; --dark: #2c3e50; --bg: #f4f7f6; --danger: #e74c3c; --success: #27ae60; --atkakolor: #8e44ad; --info: #3498db; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 10px; }
+        .container { max-width: 550px; margin: auto; background: white; padding: 15px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); }
+        h2 { text-align: center; color: var(--dark); border-bottom: 4px solid var(--primary); padding-bottom: 5px; }
+        .btn { border: none; padding: 14px; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; }
+        .scan-btn { background: var(--dark); color: white; }
+        .stop-btn { background: var(--danger); color: white; display: none; }
+        .save-btn { background: var(--success); color: white; font-size: 18px; }
+        .export-btn { background: var(--info); color: white; margin-top: 10px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 13px; color: #555; }
+        input, select, textarea { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        .section { background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px; }
+        .atkas-section { border-left: 5px solid var(--atkakolor); background: #fdf7ff; }
+        .feed-section { border-left: 5px solid var(--info); background: #f0f9ff; }
+        .section-title { font-size: 12px; font-weight: bold; color: var(--dark); text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid #eee; }
+        .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .check-item { display: flex; align-items: center; font-size: 14px; cursor: pointer; }
+        .check-item input { width: auto; margin-right: 8px; transform: scale(1.2); }
+        
+        /* QR Olvasó stílusa */
+        #reader { width: 100%; border-radius: 10px; overflow: hidden; margin-bottom: 10px; border: 2px solid var(--dark); }
+
+        .log-card { background: #fff; border: 1px solid #eee; border-left: 8px solid var(--primary); padding: 15px; margin-top: 12px; border-radius: 10px; position: relative; cursor: pointer; }
+        .alert-card { border-left-color: var(--danger) !important; background: #fff5f5 !important; }
+        .delete-icon { position: absolute; top: 10px; right: 10px; background: var(--danger); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-weight: bold; z-index: 10; display: flex; align-items: center; justify-content: center; }
+        .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #e2e3e5; margin-right: 4px; margin-top: 4px; font-weight: bold; }
+        .atka-pill { background: #dcd0ff !important; color: #4b0082 !important; border: 1px solid var(--atkakolor); }
+        .feed-pill { background: #b3e5fc !important; color: #01579b !important; border: 1px solid var(--info); }
+        .queen-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #000; margin-right: 5px; }
+        #queen-color-preview { display: inline-block; width: 18px; height: 18px; border-radius: 50%; vertical-align: middle; margin-left: 8px; border: 1px solid #999; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🐝 Méhész Mester v8.7</h2>
+    <a href="index.html">a meheszek</a>
+
+    <div id="reader" style="display:none;"></div>
+    <button id="start-scan-btn" class="btn scan-btn" onclick="startScanner()">📷 PG SCANNER BEOLVASÁS</button>
+    <button id="stop-scan-btn" class="btn stop-btn" onclick="stopScanner()">❌ KAMERA LEÁLLÍTÁSA</button>
+
+    <div id="hive-form">
+        <input type="hidden" id="edit-id">
+        
+        <div class="grid">
+            <div class="form-group"><label>PG Szám:</label><input type="text" id="pg-number"></div>
+            <div class="form-group"><label>Kaptár:</label><input type="text" id="kaptar-szam"></div>
+        </div>
+
+        <div class="grid">
+            <div class="form-group"><label>Léputca:</label><input type="number" id="leputca"></div>
+            <div class="form-group"><label>Fiasítás (keret):</label><input type="number" id="fias-keret"></div>
+        </div>
+
+        <div class="grid">
+            <div class="form-group"><label>Anya éve: <span id="queen-color-preview"></span></label><input type="number" id="anya-eve" oninput="updateQueenColor()"></div>
+            <div class="form-group"><label>Élelem szint:</label><select id="elelem"><option value="Elegendő">Elegendő</option><option value="Kevés">Kevés</option><option value="Kritikus" data-warn="true">Kritikus!</option></select></div>
+        </div>
+
+        <div class="section feed-section">
+            <div class="section-title" style="color:var(--info)">🍯 Etetés típusa</div>
+            <div class="checkbox-grid">
+                <label class="check-item"><input type="checkbox" class="feed-check" value="Cukorszirup">Cukorszirup</label>
+                <label class="check-item"><input type="checkbox" class="feed-check" value="Lepény">Lepény</label>
+                <label class="check-item"><input type="checkbox" class="feed-check" value="Invertált cukor">Invertált</label>
+                <label class="check-item"><input type="checkbox" class="feed-check" value="Vitamin/Kiegészítő">Vitamin</label>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Család Állapota</div>
+            <div class="checkbox-grid">
+                <label class="check-item"><input type="checkbox" class="status-check" value="Kiváló">Kiváló</label>
+                <label class="check-item"><input type="checkbox" class="status-check" value="Zárt fias">Zárt fias</label>
+                <label class="check-item"><input type="checkbox" class="status-check" value="Pete/Álca">Pete/Álca</label>
+                <label class="check-item"><input type="checkbox" class="status-check" value="Anyátlan" data-warn="true">Anyátlan</label>
+                <label class="check-item"><input type="checkbox" class="status-check" value="Bölcsős" data-warn="true">Bölcsős</label>
+                <label class="check-item"><input type="checkbox" class="status-check" value="Vadság">Vadság</label>
+                <label class="check-item"><input type="checkbox" class="status-check" value="Rablás" data-warn="true">Rablás</label>
+            </div>
+        </div>
+
+        <div class="section atkas-section">
+            <div class="section-title" style="color:var(--atkakolor)">🛡️ Atkakezelés</div>
+            <div class="checkbox-grid">
+                <label class="check-item"><input type="checkbox" class="atka-check" value="Amitráz (füst)">Amitráz (f)</label>
+                <label class="check-item"><input type="checkbox" class="atka-check" value="Amitráz (csík)">Amitráz (cs)</label>
+                <label class="check-item"><input type="checkbox" class="atka-check" value="Oxálsav">Oxálsav</label>
+                <label class="check-item"><input type="checkbox" class="atka-check" value="Hangyasav">Hangyasav</label>
+            </div>
+        </div>
+
+        <div class="form-group"><label>Megjegyzés:</label><textarea id="megjegyzes" rows="2"></textarea></div>
+
+        <button class="btn save-btn" id="save-main-btn" onclick="saveData()">💾 ADATOK RÖGZÍTÉSE</button>
+        <button class="btn" id="cancel-edit" style="display:none; background:#95a5a6; color:white;" onclick="resetForm()">MÉGSE</button>
+        <button class="btn export-btn" onclick="exportToExcel()">📊 EXCEL EXPORT (CSV)</button>
+    </div>
+
+    <div id="log-container"></div>
+</div>
+
+<script>
+    let html5QrCode;
+    let logs = JSON.parse(localStorage.getItem('meheszet_v8_6')) || [];
+
+    function getQueenColor(year) {
+        if (!year) return { hex: "transparent" };
+        const map = {'1':'#fff','6':'#fff','2':'#f1c40f','7':'#f1c40f','3':'#e74c3c','8':'#e74c3c','4':'#27ae60','9':'#27ae60','0':'#3498db','5':'#3498db'};
+        return { hex: map[year.toString().slice(-1)] || "#eee" };
+    }
+
+    function updateQueenColor() {
+        document.getElementById('queen-color-preview').style.backgroundColor = getQueenColor(document.getElementById('anya-eve').value).hex;
+    }
+
+    // JAVÍTOTT SZKENNER FUNKCIÓ TELEFONRA
+    async function startScanner() {
+        const readerDiv = document.getElementById('reader');
+        const startBtn = document.getElementById('start-scan-btn');
+        const stopBtn = document.getElementById('stop-scan-btn');
+        
+        readerDiv.style.display = 'block';
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'block';
+
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode("reader");
+        }
+
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+        try {
+            // Megpróbáljuk kényszeríteni a hátlapi kamerát (environment)
+            await html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
+                document.getElementById('pg-number').value = decodedText;
+                stopScanner();
+                // Rezgés visszajelzés, ha a telefon tudja
+                if (navigator.vibrate) navigator.vibrate(100);
+            });
+        } catch (err) {
+            console.error("Hiba a kamera indításakor:", err);
+            alert("Kamera hiba! Kérlek engedélyezd a hozzáférést, vagy használj HTTPS kapcsolatot.");
+            stopScanner();
+        }
+    }
+
+    function stopScanner() {
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().then(() => {
+                document.getElementById('reader').style.display = 'none';
+                document.getElementById('start-scan-btn').style.display = 'block';
+                document.getElementById('stop-scan-btn').style.display = 'none';
+            });
+        } else {
+            document.getElementById('reader').style.display = 'none';
+            document.getElementById('start-scan-btn').style.display = 'block';
+            document.getElementById('stop-scan-btn').style.display = 'none';
+        }
+    }
+
+    // --- Minden egyéb funkció változatlan ---
+
+    function saveData() {
+        const editId = document.getElementById('edit-id').value;
+        const entry = {
+            id: editId ? parseInt(editId) : Date.now(),
+            date: editId ? logs.find(l => l.id == editId).date : new Date().toLocaleString('hu-HU'),
+            pg: document.getElementById('pg-number').value,
+            kaptar: document.getElementById('kaptar-szam').value,
+            leputca: document.getElementById('leputca').value,
+            fias: document.getElementById('fias-keret').value,
+            anyaEve: document.getElementById('anya-eve').value,
+            anyaHex: getQueenColor(document.getElementById('anya-eve').value).hex,
+            etetisTipus: Array.from(document.querySelectorAll('.feed-check:checked')).map(cb => cb.value),
+            allapotok: Array.from(document.querySelectorAll('.status-check:checked')).map(cb => cb.value),
+            atkakezeles: Array.from(document.querySelectorAll('.atka-check:checked')).map(cb => cb.value),
+            elelem: document.getElementById('elelem').value,
+            megjegyzes: document.getElementById('megjegyzes').value,
+            warn: document.querySelectorAll('.status-check:checked[data-warn="true"]').length > 0 || document.getElementById('elelem').value === 'Kritikus'
+        };
+
+        if(editId) {
+            const index = logs.findIndex(l => l.id == editId);
+            logs[index] = entry;
+        } else {
+            logs.unshift(entry);
+        }
+
+        localStorage.setItem('meheszet_v8_6', JSON.stringify(logs));
+        resetForm();
+        displayLogs();
+    }
+
+    function editLog(id) {
+        const log = logs.find(l => l.id === id);
+        document.getElementById('edit-id').value = log.id;
+        document.getElementById('pg-number').value = log.pg;
+        document.getElementById('kaptar-szam').value = log.kaptar;
+        document.getElementById('leputca').value = log.leputca;
+        document.getElementById('fias-keret').value = log.fias;
+        document.getElementById('anya-eve').value = log.anyaEve;
+        document.getElementById('elelem').value = log.elelem;
+        document.getElementById('megjegyzes').value = log.megjegyzes;
+        document.querySelectorAll('.feed-check').forEach(cb => cb.checked = log.etetisTipus.includes(cb.value));
+        document.querySelectorAll('.status-check').forEach(cb => cb.checked = log.allapotok.includes(cb.value));
+        document.querySelectorAll('.atka-check').forEach(cb => cb.checked = log.atkakezeles.includes(cb.value));
+        document.getElementById('save-main-btn').innerText = "✅ MÓDOSÍTÁS MENTÉSE";
+        document.getElementById('cancel-edit').style.display = "block";
+        updateQueenColor();
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    }
+
+    function deleteLog(e, id) {
+        e.stopPropagation();
+        if(confirm("Biztosan törlöd?")) {
+            logs = logs.filter(l => l.id !== id);
+            localStorage.setItem('meheszet_v8_6', JSON.stringify(logs));
+            displayLogs();
+        }
+    }
+
+    function resetForm() {
+        document.getElementById('edit-id').value = '';
+        document.querySelectorAll('input, textarea').forEach(i => i.value = '');
+        document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+        document.getElementById('save-main-btn').innerText = "💾 ADATOK RÖGZÍTÉSE";
+        document.getElementById('cancel-edit').style.display = "none";
+        updateQueenColor();
+    }
+
+    function exportToExcel() {
+        if(logs.length === 0) return alert("Nincs adat!");
+        let csv = "\uFEFFDátum;PG;Kaptár;Léputca;Fias;Anya;Etetés;Állapot;Atka;Élelem;Megjegyzés\n";
+        logs.forEach(l => {
+            csv += `${l.date};${l.pg};${l.kaptar};${l.leputca};${l.fias};${l.anyaEve};${l.etetisTipus.join(",")};${l.allapotok.join(",")};${l.atkakezeles.join(",")};${l.elelem};${l.megjegyzes}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `mehesz_naplo_v8_7.csv`;
+        link.click();
+    }
+
+    function displayLogs() {
+        const container = document.getElementById('log-container');
+        container.innerHTML = '<h3 style="margin-top:20px;">Előzmények:</h3>';
+        logs.forEach(log => {
+            const card = document.createElement('div');
+            card.className = `log-card ${log.warn ? 'alert-card' : ''}`;
+            card.onclick = () => editLog(log.id);
+            card.innerHTML = `
+                <button class="delete-icon" onclick="deleteLog(event, ${log.id})">X</button>
+                <div style="font-size:11px; color:#666;">📅 ${log.date}</div>
+                <div style="font-weight:bold;">Kaptár: ${log.kaptar} (PG: ${log.pg})</div>
+                <div>
+                    <span class="pill"><span class="queen-dot" style="background:${log.anyaHex}"></span>${log.anyaEve}</span>
+                    <span class="pill">📏 ${log.leputca} L.u.</span>
+                    <span class="pill">🥚 ${log.fias || 0} fias</span>
+                    ${log.etetisTipus.map(e => `<span class="pill feed-pill">🍯 ${e}</span>`).join('')}
+                    ${log.allapotok.map(s => `<span class="pill">${s}</span>`).join('')}
+                    ${log.atkakezeles.map(a => `<span class="pill atka-pill">🛡️ ${a}</span>`).join('')}
+                </div>
+                <div style="font-size:12px; margin-top:5px;"><b>Élelem szint:</b> ${log.elelem}</div>
+                ${log.megjegyzes ? `<div style="font-size:11px; background:#f0f0f0; padding:4px; border-radius:4px; margin-top:5px;">${log.megjegyzes}</div>` : ''}
+            `;
+            container.appendChild(card);
+        });
+    }
+    window.onload = displayLogs;
+
+
+    <a href="https://meheszek.com" target="_blank">Facebook megnyitása új lapon</a>
+</script>
+</body>
+</html>
